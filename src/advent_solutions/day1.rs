@@ -1,9 +1,7 @@
 use std::collections::HashMap;
-
 use anyhow::anyhow;
 
-use crate::advent_solutions::SolveAdvent;
-use super::read_input_file;
+use super::{read_input_file, SolveAdvent};
 
 pub struct Day1;
 
