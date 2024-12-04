@@ -63,36 +63,31 @@ impl SolveAdvent for Day3 {
         //! Evaluate all multiply operations as above, but ignore all instructions
         //! after encountering a `don't()` instruction until the next `do()` instruction.
         let file_contents = read_input_file(path_to_file)?;
-        let mut lower_boundary = 0;
         let mut multiplied_sum = 0;
         let mut mul_op_enabled = true;
-        while lower_boundary < file_contents.len() {
+        for lower_boundary in 0..file_contents.len() {
             //While its tempting to use the same window size for all ops, this causes issues at the end of the string parsing
             //when there could be a valid mul op but a dont() op would not fit.
             if let Some(command) = file_contents.get(lower_boundary..lower_boundary + DONT_WINDOW_SIZE) {
                 if command == "don't()" {
                     mul_op_enabled = false;
-                    lower_boundary += 1;
                     continue;
                 }
             }
             if let Some(command) = file_contents.get(lower_boundary..lower_boundary + DO_WINDOW_SIZE) {
                 if command == "do()" {
                     mul_op_enabled = true;
-                    lower_boundary += 1;
                     continue;
                 }
             }
             if let Some(command) = file_contents.get(lower_boundary..lower_boundary + MUL_WINDOW_SIZE) {
-                if command == "mul(" {
-                    if mul_op_enabled {
+                if command == "mul(" && mul_op_enabled {
                         if let Ok(mul_result) = parse_mul_operation(&file_contents[lower_boundary + MUL_WINDOW_SIZE..]) {
                             multiplied_sum += mul_result;
                         }
-                    }
+                    
                 }
             }
-            lower_boundary += 1;
         }
         println!("Sum of all enabled multiplications is {}", multiplied_sum);
 
