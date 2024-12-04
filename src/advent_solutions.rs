@@ -4,6 +4,7 @@ use anyhow::Context;
 
 
 pub mod day1;
+pub mod day2;
 
 pub fn read_input_file<P>(fp: P) -> anyhow::Result<String>
 where
@@ -20,8 +21,12 @@ where
 /// should simply be printed.
 pub trait SolveAdvent {
     ///How to solve part1 of the days puzzle.
-    fn solve_part1(path_to_file: &str) -> anyhow::Result<()>;
+    fn solve_part1(_path_to_file: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
     ///How to solve part2 of the days puzzle.
-    fn solve_part2(path_to_file: &str) -> anyhow::Result<()>;
+    fn solve_part2(_path_to_file: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
