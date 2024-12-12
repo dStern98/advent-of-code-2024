@@ -14,7 +14,7 @@ struct GardenRegion {
     ///Represents all perimeter boundaries of the region
     perimeter_fences: Vec<PerimeterFenceMarker>,
     ///The unique elements of the region
-    region_elements: HashSet<(i64, i64)>
+    region_elements: HashSet<OrderedPair>
 }
 
 impl GardenRegion {
@@ -69,6 +69,7 @@ impl GardenRegion {
             }
             edges_traversed += 1;
         }
+        //In part2, the fence price is defined as edges * area
         edges_traversed * self.region_elements.len()
     }
 }
@@ -190,15 +191,6 @@ struct GardenProbe {
 }
 
 impl GardenProbe {
-    fn out_of_bounds(&self, garden_map: &[Vec<char>]) -> bool {
-        //! Is the garden probe's current position out of bounds?
-        let (current_row, current_col) = (self.current_position.0, self.current_position.1);
-        if current_row < 0 || current_col < 0 || current_row  >= garden_map.len() as i64 || current_col >= garden_map[0].len() as i64 {
-            return true
-        }
-        false
-    }
-
     fn spawn_4(&self) -> impl IntoIterator<Item = Self> {
         //! Returns 4 new probes to continue probing in all 4 cardinal directions
         //! from the current probe's location: Up, down, left, right.
@@ -237,27 +229,25 @@ fn process_garden_region(starting_row: i64, starting_col: i64, garden_map: &[Vec
     }
     ];
     while let Some(current_probe)  = traversal_stack.pop() {
-        if current_probe.out_of_bounds(garden_map) && current_probe.last_position.is_some() {
-                //If the current probe is out of bounds, we have identified a perimeter of the region, which we note.
-                let fence_marker = PerimeterFenceMarker::try_new(current_probe.last_position.unwrap(), current_probe.current_position)?;
-                perimeter_crossings.push(fence_marker);
-                continue;
-        }
-        if safe_map_read(current_probe.current_position.0, current_probe.current_position.1, garden_map)? == region_symbol {
-            if region_elements.contains(&current_probe.current_position) {
-                //In a cycle, so kill this probe
+        //Traverse the region depth first
+        if let Ok(current_region_symbol) = safe_map_read(current_probe.current_position.0, current_probe.current_position.1, garden_map) {
+            if current_region_symbol == region_symbol {
+                if region_elements.contains(&current_probe.current_position) {
+                    //In a cycle, so kill this probe
+                    continue;
+                }
+                //We are still inside the region we want to explore, so just continue the search by spawning new probes
+                region_elements.insert(current_probe.current_position);
+                traversal_stack.extend(current_probe.spawn_4());
                 continue;
             }
-            //We are still inside the region we want to explore, so just continue the search by spawning new probes
-            region_elements.insert(current_probe.current_position);
-            traversal_stack.extend(current_probe.spawn_4()
-            );
-        } else if current_probe.last_position.is_some() {
-                //If we have reached a position of a different `region_symbol`, then we have left the region to explore, 
+        }
+        if let Some(last_probe_position) = current_probe.last_position {
+                //If we have reached a position of a different `region_symbol` or gone off the map, then we have left the region to explore, 
                 //so we mark it as a fence (perimeter)
-                let fence_marker = PerimeterFenceMarker::try_new(current_probe.last_position.unwrap(), current_probe.current_position)?;
+                //(We know that the `current_probe_position` is off the map, but the `last_probe_position` is inbounds)
+                let fence_marker = PerimeterFenceMarker::try_new(last_probe_position, current_probe.current_position)?;
                 perimeter_crossings.push(fence_marker);
-                continue;    
         }
     }
     Ok(GardenRegion {
@@ -270,6 +260,7 @@ impl SolveAdvent for Day12 {
     fn solve_part1(path_to_file: &str) -> anyhow::Result<()> {
         let file_contents = read_input_file(path_to_file)?;
         let garden_map = file_contents.lines().map(|line| line.chars().collect::<Vec<_>>()).collect::<Vec<_>>();
+        //The visited set prevents counting duplicate regions that have already been reached by a previous iteration
         let mut visited = HashSet::new();
         let mut total_fence_price = 0 ;
         for row_number in 0..garden_map.len() {
