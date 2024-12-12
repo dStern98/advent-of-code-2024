@@ -12,7 +12,7 @@ type OrderedPair = (i64, i64);
 #[derive(Debug, Clone)]
 struct GardenRegion {
     ///Represents all perimeter boundaries of the region
-    perimeter: Vec<PerimeterFenceMarker>,
+    perimeter_fences: Vec<PerimeterFenceMarker>,
     ///The unique elements of the region
     region_elements: HashSet<(i64, i64)>
 }
@@ -20,13 +20,62 @@ struct GardenRegion {
 impl GardenRegion {
     fn get_part1_fence_price(&self) -> usize {
         //! Part1 fence price is just area * perimeter
-        self.region_elements.len() * self.perimeter.len()
+        self.region_elements.len() * self.perimeter_fences.len()
+    }
+
+    fn get_part2_fence_price(&self) -> usize {
+        //! How to map all edges Algorithm:
+        //! 
+        //! 1. Select a random fence
+        //! 2. Iterate laterally (orthogonal to the direction of the fence) as long as possible
+        //! 3. Remove any fences reached from the `unique_perimeter_fences` set. When iteration completes, increment the `edges_traversed` counter.
+        //! 4. Restart from step 1 so long as the `unique_perimeter_fences` set is not empty.
+        let mut unique_perimeter_fences = self.perimeter_fences.clone().into_iter().collect::<HashSet<_>>();
+        let mut edges_traversed = 0;
+        while !unique_perimeter_fences.is_empty() {
+            let starting_fence = *unique_perimeter_fences.iter().next().unwrap();
+            let fence_direction = starting_fence.jump_direction;
+            let mut explorer_stack = vec![starting_fence];
+            let mut cycle_guard = HashSet::new();
+            while let Some(current_explorer) = explorer_stack.pop() {
+                if cycle_guard.contains(&current_explorer) {
+                    continue;
+                }
+                cycle_guard.insert(current_explorer);
+                if !unique_perimeter_fences.contains(&current_explorer) || current_explorer.jump_direction != fence_direction {
+                    //kill probe if `current_explorer` is not a fence, or if the jump direction has changed
+                    continue;
+                }
+                //Remove the `current_explorer` from the set, as it is part of the current edge
+                //we are exploring
+                unique_perimeter_fences.remove(&current_explorer);
+                //Continue exploring the current edge by moving probes laterally (orthogonal to the jump direction)
+                let next_explorers = match current_explorer.jump_direction {
+                    Direction::Down | Direction::Up => {
+                        [
+                            current_explorer.slide_left(),
+                            current_explorer.slide_right()
+                        ]
+                    },
+                    Direction::Left | Direction::Right => {
+                        [
+                            current_explorer.slide_up(), 
+                            current_explorer.slide_down()
+                        ]
+                    }
+                };
+                explorer_stack.extend(next_explorers);
+
+            }
+            edges_traversed += 1;
+        }
+        edges_traversed * self.region_elements.len()
     }
 }
 
 ///All 4 possible cardinal directions a perimeter
 /// could `face`. Diagonals are not allowed here.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 enum Direction {
     Up,
     Down, 
@@ -38,13 +87,14 @@ enum Direction {
 /// region perimeters, we mark the inbound position 
 /// and the outbound position, as well as the cardinal direction this
 /// boundary faces.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 struct PerimeterFenceMarker {
-    #[allow(dead_code)]
+    ///The ordered pair of the inbounds (part of the region) position
+    /// that represents the boundary
     inbounds: OrderedPair,
-    #[allow(dead_code)]
-    outbounds: OrderedPair,
-    #[allow(dead_code)]
+    ///The direction from the `inbounds` point that the perimeter points.
+    /// If `inbounds` is a corner, its possible for the same `inbounds` to have
+    /// two or more fence markers pointing in different directions.
     jump_direction: Direction
 }
 
@@ -53,10 +103,41 @@ impl PerimeterFenceMarker {
         let jump_direction  =  Direction::from_ordered_pairs(inbounds, outbounds)?;
         Ok(PerimeterFenceMarker {
             inbounds,
-            outbounds,
             jump_direction
         }
     )
+    }
+
+    fn slide_left(&self) -> Self {
+        //! Slide laterally left while preserving the jump direction.
+        PerimeterFenceMarker {
+            inbounds: (self.inbounds.0, self.inbounds.1 - 1),
+            jump_direction: self.jump_direction
+        }
+    }
+
+    fn slide_up(&self) -> Self {
+        //! Slide laterally up while preserving jump direction.
+        PerimeterFenceMarker {
+            inbounds: (self.inbounds.0 -1, self.inbounds.1),
+            jump_direction: self.jump_direction
+        }
+    }
+
+    fn slide_down(&self) -> Self {
+        //! Slide laterally down 1 while preserving jump direction.
+        PerimeterFenceMarker {
+            inbounds: (self.inbounds.0 + 1, self.inbounds.1),
+            jump_direction: self.jump_direction
+        }
+    }
+
+    fn slide_right(&self) -> Self {
+        //! Slide laterally right 1 while preserving jump direction.
+        PerimeterFenceMarker {
+            inbounds: (self.inbounds.0, self.inbounds.1 + 1),
+            jump_direction: self.jump_direction
+        }
     }
 }
 
@@ -146,6 +227,7 @@ impl GardenProbe {
 
 fn process_garden_region(starting_row: i64, starting_col: i64, garden_map: &[Vec<char>]) -> anyhow::Result<GardenRegion> {
     //! Analyze a garden region starting from the `starting_row`, `starting_col` position.
+    //! Collects all of the interior region points, and all perimeter fences. 
     let region_symbol = safe_map_read(starting_row, starting_col, garden_map)?;
     let mut region_elements = HashSet::new(); //All positions in this region being explored
     let mut perimeter_crossings = Vec::new(); // Fences that mark the perimeter of the region.
@@ -179,7 +261,7 @@ fn process_garden_region(starting_row: i64, starting_col: i64, garden_map: &[Vec
         }
     }
     Ok(GardenRegion {
-        perimeter: perimeter_crossings,
+        perimeter_fences: perimeter_crossings,
         region_elements
     })
 }
@@ -206,8 +288,26 @@ impl SolveAdvent for Day12 {
         Ok(())
     }
 
-    fn solve_part2(_path_to_file: &str) -> anyhow::Result<()> {
-        //The above boilerplate does all the hard work. Completing part2 should not be too hard.
+    fn solve_part2(path_to_file: &str) -> anyhow::Result<()> {
+        //! Trickier than part1. All the hard work is done in the `get_part2_fence_price`. The rest
+        //! of the code is identical to part1 solution.
+        let file_contents = read_input_file(path_to_file)?;
+        let garden_map = file_contents.lines().map(|line| line.chars().collect::<Vec<_>>()).collect::<Vec<_>>();
+        let mut visited = HashSet::new();
+        let mut total_fence_price = 0 ;
+        for row_number in 0..garden_map.len() {
+            for col_number in 0..garden_map[0].len() {
+                let col_number = col_number as i64;
+                let row_number = row_number as i64;
+                if visited.contains(&(row_number, col_number)) {
+                    continue;
+                }
+                let plot_statistics = process_garden_region(row_number, col_number, &garden_map)?;
+                total_fence_price += plot_statistics.get_part2_fence_price();
+                visited.extend(plot_statistics.region_elements);
+            }
+        }
+        println!("Total fence cost is {}", total_fence_price);
         Ok(())
     }
 }
