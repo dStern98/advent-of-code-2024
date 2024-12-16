@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-
 use anyhow::{anyhow, Context};
 
 use super::{read_input_file, SolveAdvent};
@@ -102,7 +101,90 @@ impl SolveAdvent for Day14 {
         Ok(())
     }
 
-    fn solve_part2(_path_to_file: &str) -> anyhow::Result<()> {
+    fn solve_part2(path_to_file: &str) -> anyhow::Result<()> {
+        //! Trying but so far not succeeding to build a function `possible_christmas_tree` that identifies
+        //! when the robots have built out a christmas tree. 
+        let board_dimensions = (103, 101);
+        let file_contents = read_input_file(path_to_file)?;
+        let mut robots = file_contents.lines().map(Robot::try_new).collect::<Result<Vec<_>, _>>()?;
+        //Move the robots 1 tick at a time
+        for tick_number in 0.. {
+            if tick_number % 10_000 == 0 {
+                println!("{}", tick_number);
+            }
+            for robot in robots.iter_mut() {
+                robot.tick(board_dimensions);
+            }
+            if possible_christmas_tree(board_dimensions, &robots, 0.8) {
+                println!("Possible christmas tree at {}!", tick_number);
+                draw_board(board_dimensions, &robots);
+                break;
+            }
+        }
         Ok(())
     }
+}
+
+fn draw_board(board_dimensions: OrderedPair, robots: &[Robot]) {
+    //! Draw the board, with a `*` for each robot position.
+    let (board_rows, board_cols) = board_dimensions;
+    let mut board_drawing = (0..board_rows as usize).into_iter().map(|_| vec![' '; board_cols as usize]).collect::<Vec<_>>();
+    for robot in robots.iter() {
+        board_drawing[robot.position.0 as usize][robot.position.1 as usize] = '*';
+    }
+    let top_bottom_drawing = (0..board_dimensions.1 + 2).into_iter().map(|_| '=').collect::<String>();
+    println!("{}", top_bottom_drawing);
+    for row in board_drawing {
+        println!("|{}|", row.into_iter().collect::<String>());
+    }
+    println!("{}", top_bottom_drawing);
+   
+}
+
+
+fn possible_christmas_tree(board_dimensions: OrderedPair, robots: &[Robot], acceptance_threshold: f64) -> bool {
+    //! Algorithm to identify if a christmas tree could potentially be drawn.
+    
+    //Index the robots by their `row` position.
+    let mut robots_by_row: HashMap<usize, Vec<&Robot>> = HashMap::new();
+    for robot in robots.iter() {
+        robots_by_row.entry(robot.position.0 as usize).or_default().push(robot);
+    }
+
+    //Use the top robot (lowest row position) as an anchor to build a vertical symmetry line.
+    let min_row_with_robot = robots_by_row.keys().min().unwrap();
+    let robots_at_top_of_map = robots_by_row.get(min_row_with_robot).unwrap();
+    if robots_at_top_of_map.len() != 1 {
+        return false;
+    }
+    let top_robot_column = robots_at_top_of_map[0].position.1;   
+        let mut acceptances = 0;
+    //For all rows below the starting row, (greater row number), we
+    //look for symmetry around the point of the christmas tree.
+    for remaining_row_number in *min_row_with_robot + 1 as usize..board_dimensions.0 as usize {
+        let robots_in_row = if let Some(robots_in_row) = robots_by_row.get(&remaining_row_number) {
+            robots_in_row
+        } else {
+            //For now ignore empty rows
+            continue;
+        };
+        if robots_in_row.len() > 2{
+            // println!("Rejecting because row {} has {} robots", remaining_row, robots_in_row.len());
+            continue;
+
+        } else if robots_in_row.len() == 2 {
+            let distance_to_middle_col_robot1 = robots_in_row[0].position.1 - top_robot_column;
+            let distance_to_middle_col_robot2 = robots_in_row[1].position.1 - top_robot_column;
+            if distance_to_middle_col_robot1 + distance_to_middle_col_robot2 != 0 {
+                // println!("Rejecting because two robots of same row are not symmetrical around middle column");
+                // println!("Robots are at positions {:?} and {:?} respectively, with middle column {}", robots_in_row[0].position, robots_in_row[1].position, top_robot_col);
+                continue;
+            }
+        } else if robots_in_row.len() == 1  && robots_in_row[0].position.1 != top_robot_column{
+            continue;
+            
+        }
+        acceptances += 1;
+    }
+    (acceptances as f64 / robots.len() as f64) >= acceptance_threshold
 }
