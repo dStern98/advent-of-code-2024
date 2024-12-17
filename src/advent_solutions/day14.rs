@@ -128,11 +128,11 @@ impl SolveAdvent for Day14 {
 fn draw_board(board_dimensions: OrderedPair, robots: &[Robot]) {
     //! Draw the board, with a `*` for each robot position.
     let (board_rows, board_cols) = board_dimensions;
-    let mut board_drawing = (0..board_rows as usize).into_iter().map(|_| vec![' '; board_cols as usize]).collect::<Vec<_>>();
+    let mut board_drawing = (0..board_rows as usize).map(|_| vec![' '; board_cols as usize]).collect::<Vec<_>>();
     for robot in robots.iter() {
         board_drawing[robot.position.0 as usize][robot.position.1 as usize] = '*';
     }
-    let top_bottom_drawing = (0..board_dimensions.1 + 2).into_iter().map(|_| '=').collect::<String>();
+    let top_bottom_drawing = (0..board_dimensions.1 + 2).map(|_| '=').collect::<String>();
     println!("{}", top_bottom_drawing);
     for row in board_drawing {
         println!("|{}|", row.into_iter().collect::<String>());
@@ -161,7 +161,7 @@ fn possible_christmas_tree(board_dimensions: OrderedPair, robots: &[Robot], acce
         let mut acceptances = 0;
     //For all rows below the starting row, (greater row number), we
     //look for symmetry around the point of the christmas tree.
-    for remaining_row_number in *min_row_with_robot + 1 as usize..board_dimensions.0 as usize {
+    for remaining_row_number in *min_row_with_robot + 1..board_dimensions.0 as usize {
         let robots_in_row = if let Some(robots_in_row) = robots_by_row.get(&remaining_row_number) {
             robots_in_row
         } else {
