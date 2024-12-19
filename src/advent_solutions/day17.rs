@@ -17,7 +17,7 @@ struct ChronospatialComputer {
     ///Current Instruction Pointer
     instruction_ptr: usize, 
     ///Output buffer for the `out` command
-    out_buffer: Vec<i64>
+    out_buffer: Vec<u8>
 }
 
 fn parse_input_file(file_contents: &str) -> anyhow::Result<(ChronospatialComputer, Vec<u8>)> {
@@ -70,14 +70,13 @@ impl ChronospatialComputer {
         Ok(())
     }
 
-    fn run(&mut self, program: Vec<u8>) -> anyhow::Result<()> {
+    fn run(&mut self, program: &[u8]) -> anyhow::Result<()> {
         //! Run the program until the instruction pointer goes off the map
         while let Some(instructions) = program.get(self.instruction_ptr..self.instruction_ptr + 2) {
             let opcode = instructions[0];
             let operand = instructions[1];
             self.execute_instruction(opcode, operand)?;
         }
-        println!("Out contains the following: {:?}", self.out_buffer.iter().map(|num| num.to_string()).collect::<Vec<_>>().join(","));
         Ok(())
     }
 
@@ -120,7 +119,7 @@ impl ChronospatialComputer {
 
     fn out(&mut self, operand: u8) -> anyhow::Result<()> {
         let combo_operand = self.resolve_combo_operand(operand)? % 8;
-        self.out_buffer.push(combo_operand);
+        self.out_buffer.push(combo_operand as u8);
         self.instruction_ptr += 2;
         Ok(())
     }
@@ -146,11 +145,24 @@ impl SolveAdvent for Day17 {
     fn solve_part1(path_to_file: &str) -> anyhow::Result<()> {
         let file_contents = read_input_file(path_to_file)?;
         let (mut computer, program_instructions) = parse_input_file(&file_contents)?;
-        computer.run(program_instructions)?;
+        computer.run(&program_instructions)?;
+        println!("Out contains the following: {:?}", computer.out_buffer.iter().map(|num| num.to_string()).collect::<Vec<_>>().join(","));
         Ok(())
     }
 
-    fn solve_part2(_path_to_file: &str) -> anyhow::Result<()> {
+    fn solve_part2(path_to_file: &str) -> anyhow::Result<()> {
+        //! Brute force solution will not resolve in a reasonable amount of time
+        let file_contents = read_input_file(path_to_file)?;
+        let (computer, program_instructions) = parse_input_file(&file_contents)?;
+        for register_a_init in 1..=i64::MAX {
+            let mut computer = computer.clone();
+            computer.ra = register_a_init;
+            computer.run(&program_instructions)?;
+            if computer.out_buffer == program_instructions {
+                println!("Register a init value {} generates out buffer copy of input program", register_a_init);
+                break;
+            }
+        }
         Ok(())
     }
 }
