@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
+use anyhow::anyhow;
+
 use super::{read_input_file, SolveAdvent};
 
 pub struct Day18;
@@ -73,9 +75,9 @@ impl MemoryTraveler {
     }
 }
 
-fn build_corrupted_bytes(input_file: &str, size_limit: usize) -> anyhow::Result<HashSet<OrderedPair>> {
+fn build_corrupted_bytes(input_file: &str, size_limit: usize) -> anyhow::Result<Vec<OrderedPair>> {
     //! Construct a set of the corruped byte positions.
-    let mut corruped_bytes = HashSet::new();
+    let mut corruped_bytes = Vec::new();
     for (line_number, line) in input_file.lines().enumerate() {
         if line_number == size_limit {
             break;
@@ -84,7 +86,7 @@ fn build_corrupted_bytes(input_file: &str, size_limit: usize) -> anyhow::Result<
         let [col, row]: [&str; 2] = line.split(',').collect::<Vec<_>>().try_into().map_err(|_| anyhow::anyhow!("Failed to split coordinates"))?;
         let row = row.parse::<i64>()?;
         let col = col.parse::<i64>()?;
-        corruped_bytes.insert((row, col));
+        corruped_bytes.push((row, col));
     }
     Ok(corruped_bytes)
 }
@@ -122,36 +124,61 @@ impl Optimizer {
     }
 }
 
+fn find_shortest_path(corrupted_bytes: &HashSet<OrderedPair>, grid_size: OrderedPair) -> Option<usize> {
+    //! Depth first traversal of the memory space to find the optimal path (the path with the fewest steps)
+    //! The `Optimizer` keeps the runtime from being exponential
+    //! If no optimal path exists, then `None` is returned.
+    let mut explorer_queue = VecDeque::new();
+    explorer_queue.push_back(MemoryTraveler::new(0, 0));
+    let mut optimizer = Optimizer::new();
+    let mut min_path_taken: Option<usize> = None;
+    while let Some(mut current_explorer) = explorer_queue.pop_front() {
+        if current_explorer.in_cycle() || corrupted_bytes.contains(&(current_explorer.row, current_explorer.col)) || !current_explorer.is_inbounds(grid_size) {
+            continue;
+        }
+        if optimizer.kill_probe(&current_explorer) {
+            continue;
+        }
+        current_explorer.visit();
+        if current_explorer.exit_reached(grid_size) {
+            match min_path_taken {
+                Some(current_min_path_taken) => min_path_taken = Some(current_min_path_taken.min(current_explorer.visited.len())), 
+                None => min_path_taken = Some(current_explorer.visited.len())
+            }
+        }
+        explorer_queue.extend(current_explorer.spawn_next());
+    }
+    min_path_taken
+}
+
 
 impl SolveAdvent for Day18 {
     fn solve_part1(path_to_file: &str) -> anyhow::Result<()> {
-        //! Depth first traversal of the memory space to find the optimal path.
-        //! The `Optimizer` keeps the runtime from being exponential
+        //! Traverse all possible paths to find the shortest path
         let file_contents = read_input_file(path_to_file)?;
-        let mut optimizer = Optimizer::new();
-        let corruped_bytes = build_corrupted_bytes(&file_contents, 1024)?;
+        let corrupted_bytes = build_corrupted_bytes(&file_contents, 1024)?.into_iter().collect::<HashSet<_>>();
         let grid_size = (70, 70);
-        let mut explorer_queue = VecDeque::new();
-        explorer_queue.push_back(MemoryTraveler::new(0, 0));
-        let mut min_path_taken = usize::MAX;
-        while let Some(mut current_explorer) = explorer_queue.pop_front() {
-            if current_explorer.in_cycle() || corruped_bytes.contains(&(current_explorer.row, current_explorer.col)) || !current_explorer.is_inbounds(grid_size) {
-                continue;
-            }
-            if optimizer.kill_probe(&current_explorer) {
-                continue;
-            }
-            current_explorer.visit();
-            if current_explorer.exit_reached(grid_size) {
-                min_path_taken = min_path_taken.min(current_explorer.visited.len());
-            }
-            explorer_queue.extend(current_explorer.spawn_next());
-        }
-        println!("Minimum path to exit is {} steps", min_path_taken - 1);
+        let shortest_path = find_shortest_path(&corrupted_bytes, grid_size).ok_or(anyhow!("No path found at all!"))?;
+        println!("Minimum path to exit is {} steps", shortest_path - 1);
         Ok(())
     }
 
-    fn solve_part2(_path_to_file: &str) -> anyhow::Result<()> {
+    fn solve_part2(path_to_file: &str) -> anyhow::Result<()> {
+        //! For each byte we corrupt, check if this byte makes traversing the 
+        //! memory map from start to exit impossible.
+        let file_contents = read_input_file(path_to_file)?;
+        let grid_size = (70, 70);
+        let all_corrupted_bytes = build_corrupted_bytes(&file_contents, file_contents.lines().count())?;
+        let mut corrupted_bytes = HashSet::new();
+        for corrupted_byte in all_corrupted_bytes  {
+            corrupted_bytes.insert(corrupted_byte);
+            if find_shortest_path(&corrupted_bytes, grid_size).is_none() {
+                //We are done when there is no optimal path at all!
+                let (break_row, break_col) = corrupted_byte;
+                println!("Coordinates (as col,row) of first byte that prevents exit is: {break_col},{break_row}");
+                break;
+            }
+        }
         Ok(())
     }
 }
