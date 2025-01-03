@@ -4,6 +4,6 @@ use crate::advent_solutions::SolveAdvent;
 
 fn main() -> anyhow::Result<()> {
     Day22::solve_part1("input.txt")?;
-    Day22::solve_part2("test.txt")?;
+    Day22::solve_part2("input.txt")?;
     Ok(())
 }
