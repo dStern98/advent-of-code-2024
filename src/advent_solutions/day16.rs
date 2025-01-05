@@ -169,13 +169,6 @@ impl Optimizer {
 
     fn kill_probe(&mut self, current_maze_runner: &MazeRunner) -> bool {
         //! Kill the probe if the `current_maze_runner` cannot possibly be on an optimal path.
-        //! 
-        //! Currently, a single score is kept for each position/direction pairing. Any probe that has reached
-        //! the position with a worst score cannot possibly be on an optimal path, because from this point on the two probes
-        //! will have identical futures. This solution is sub-optimal, because it is ordering sensitive. If two probes collide at a 
-        //! position, one with score `15`, the other with score `20`, the order matters. If the `15` calls `kill_probe` first, then the `20`
-        //! probe will be killed when it calls `kill_probe`. However, if `15` comes second, then the `20` is not killed even though we know it to be
-        //! on a suboptimal path. A better optimizer is possible to build, and maybe a future improvement on this day's solution would try to build one.
         if let Some(previous_best_score) =self.best_score_tracker.get_mut(&(current_maze_runner.position, current_maze_runner.direction)) {
             if current_maze_runner.running_score > *previous_best_score {
                 //A previous probe got here first and had a better score, so the current probe should be killed
@@ -227,7 +220,7 @@ impl SolveAdvent for Day16 {
     fn solve_part2(path_to_file: &str) -> anyhow::Result<()> {
         //! Essentially the exact same algorithm as the solution to part1, but
         //! each unique positions that are on one of the optimial paths is tracked.
-        //! Runtime is around 50 seconds, which can of course be improved.
+        //! Runtime is around 50 seconds, which can be improved.
         let file_contents =read_input_file(path_to_file)?;
         let maze = file_contents.lines().map(|line| line.chars().collect::<Vec<_>>()).collect::<Vec<_>>();
         let mut traversal_queue = VecDeque::new();

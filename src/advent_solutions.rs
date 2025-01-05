@@ -25,7 +25,7 @@ pub mod day18;
 pub mod day22;
 pub mod day23;
 pub mod day24;
-
+pub mod day25;
 
 pub fn read_input_file<P>(fp: P) -> anyhow::Result<String>
 where
