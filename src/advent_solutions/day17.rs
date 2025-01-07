@@ -70,6 +70,35 @@ impl ChronospatialComputer {
         Ok(())
     }
 
+    fn early_terminate_program_copy(&self, program: &[u8]) -> bool {
+        //! Check if we can early terminate the program copy attempt
+        //! because we already know that the Register A initialization value
+        //! could not possibly generate the necessary output.
+        if self.out_buffer.len() > program.len() {
+            return true;
+        }
+        //Only check the last value in the buffer rather than the entire buffer.
+        if self.out_buffer.is_empty() || program[self.out_buffer.len() - 1] == *self.out_buffer.last().unwrap() {
+            return false;
+        }
+        true
+    }
+
+    fn try_copy_program(&mut self, program: &[u8]) -> anyhow::Result<bool> {
+        //! Execute the passed in `program` as normal, but exit early if it becomes
+        //! apparent that the program copy attempt will fail.
+        while let Some(instructions) = program.get(self.instruction_ptr..self.instruction_ptr + 2) {
+            let opcode = instructions[0];
+            let operand = instructions[1];
+            self.execute_instruction(opcode, operand)?;
+            if opcode == 5 && self.early_terminate_program_copy(program) {
+                //Only check for early termination after an out call (opcode 5)
+                return Ok(false);
+            }
+        }
+        Ok(self.out_buffer == program)
+    }
+
     fn run(&mut self, program: &[u8]) -> anyhow::Result<()> {
         //! Run the program until the instruction pointer goes off the map
         while let Some(instructions) = program.get(self.instruction_ptr..self.instruction_ptr + 2) {
@@ -155,12 +184,15 @@ impl SolveAdvent for Day17 {
         let file_contents = read_input_file(path_to_file)?;
         let (computer, program_instructions) = parse_input_file(&file_contents)?;
         for register_a_init in 1..=i64::MAX {
+            if register_a_init % 1_000_000 == 0 {
+                println!("At value {}", register_a_init);
+            }
             let mut computer = computer.clone();
             computer.ra = register_a_init;
-            computer.run(&program_instructions)?;
-            if computer.out_buffer == program_instructions {
-                println!("Register a init value {} generates out buffer copy of input program", register_a_init);
+            if computer.try_copy_program(&program_instructions)? {
+                println!("Register A init value {} generates out buffer copy of input program", register_a_init);
                 break;
+
             }
         }
         Ok(())
