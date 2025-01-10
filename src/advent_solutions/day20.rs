@@ -11,13 +11,13 @@ struct RaceTrack {
 }
 
 impl RaceTrack {
-
     fn new(track: Vec<Vec<char>>) -> Self {
         RaceTrack {
             track
         }
     }
     fn reached_end(&self, position: OrderedPair) -> bool {
+        //! Whether or not the current `position` is at the End of the racetrack (position `E`)
         if !self.is_valid_position(position) {
             return false;
         }
@@ -27,18 +27,21 @@ impl RaceTrack {
     }
 
     fn is_valid_position(&self,  position: OrderedPair) -> bool {
+        //! Whether or not the current `position` is a valid spot on the board.
+        //! Walls count as invalid positions.
         let (row, col) = position;
         if row < 0 || col < 0 {
            return false
         }
         if let Some(row) = self.track.get(row as usize) {
             if let Some(symbol) = row.get(col as usize) {
-                return !(symbol == &'#')
+                return symbol != &'#'
             }
         }
         false
     }
     fn find_start_position(&self) -> anyhow::Result<OrderedPair> {
+        //! Find the start position for the race.
         for (row_number, row) in self.track.iter().enumerate() {
             for (col_number, symbol) in row.iter().enumerate() {
                 if symbol == &'S' {
@@ -50,7 +53,10 @@ impl RaceTrack {
     }
 
     fn index_racetrack(&self) -> anyhow::Result<HashMap<OrderedPair, usize>> {
+        //! Records a map of each position on the board to the number of picoseconds
+        //! that have occurred. No cheating is allowed, so the path is deterministic
         let racetrack_start = self.find_start_position()?;
+        //Traversal queue stores a tuple of `(track position, picoseconds)`
         let mut traversal_queue = vec![(racetrack_start, 0)];
         let mut track_index = HashMap::new();
         while let Some((current_position, picoseconds)) = traversal_queue.pop() {
@@ -59,6 +65,7 @@ impl RaceTrack {
             }
             track_index.insert(current_position, picoseconds);
             if self.reached_end(current_position) {
+                //As soon as we reach the end of the track iteration can end.
                 break;
             }
             let (current_row, current_col) = current_position;
@@ -81,9 +88,17 @@ impl SolveAdvent for Day20 {
         let racetrack = RaceTrack::new(racetrack);
         let indexed_racetrack = racetrack.index_racetrack()?;
         let mut cheat_shortcuts: HashMap<i64, usize> = HashMap::new();
+        //Explore all possible cheats
         for (track_position, picoseconds) in indexed_racetrack.iter() {
+            //For any given cheat start position, the seconds saved are the distance between 
+            //the seconds it took the non-cheater to get from the old position (before cheating)
+            // to the new position (after cheating) minus the seconds the cheater moved during the cheat.
             let (row, col) = *track_position;
             let possible_cheats=  [
+                (row + 1, col + 1),
+                (row - 1, col + 1),
+                (row + 1, col - 1),
+                (row - 1, col - 1),
                 (row + 2, col),
                 (row - 2, col), 
                 (row, col + 2), 
