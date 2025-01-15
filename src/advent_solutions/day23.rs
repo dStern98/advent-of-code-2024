@@ -60,6 +60,8 @@ impl SolveAdvent for Day23 {
     }
 
     fn solve_part2(path_to_file: &str) -> anyhow::Result<()> {
+        //! Solution takes ~21 seconds to solve the full part2 problem input
+        //! Not fast but it gets the job done
         let file_contents = read_input_file(path_to_file)?;
         let mut connection_topology = construct_topology(&file_contents)?;
         for (computer, connected_computers) in connection_topology.iter_mut() {
@@ -90,7 +92,7 @@ fn find_largest_connected_network(optimizer: &mut HashSet<(String, String)>, sta
     //! largest set of connected devices. The Optimizer is used to prevent other invocations
     //! of this call from wasting work traveling previously explored nodes. 
     let mut largest_connected_network = HashSet::new();
-    let mut traversal_queue = vec![NetworkTraveler::new(starting_position.to_string(), HashSet::new(), topology)];
+    let mut traversal_queue = vec![NetworkTraveler::new(starting_position.to_string(), HashSet::new(),None,  topology)];
     while let Some(mut current_traveler) = traversal_queue.pop() {
         let mut visited =  current_traveler.visited.clone().into_iter().collect::<Vec<_>>();
         visited.sort();
@@ -117,15 +119,19 @@ struct NetworkTraveler<'a> {
     visited: HashSet<String>,
     ///Current computer position
     current: String,
+    ///Previous visited computer, used for optimizing
+    /// the totally connected network check
+    last_computer: Option<String>,
     network_topology: &'a ConnectionTopology
 }
 
 impl <'a>NetworkTraveler <'a> {
-    fn new(current: String, visited: HashSet<String>, network: &'a ConnectionTopology) -> Self {
+    fn new(current: String, visited: HashSet<String>, last_computer: Option<String>,network_topology: &'a ConnectionTopology) -> Self {
         NetworkTraveler {
             current, 
             visited,
-            network_topology: network
+            last_computer,
+            network_topology
         }
     }
     fn in_cycle(&self) -> bool {
@@ -133,18 +139,23 @@ impl <'a>NetworkTraveler <'a> {
     }
     fn visit(&mut self) {
         self.visited.insert(self.current.clone());
+        self.last_computer = Some(self.current.clone());
     }
     fn spawn_next(&self) -> Vec<Self> {
         //! Travel to all of the next computers connect to current computer
-        self.network_topology.get(&self.current).unwrap().iter().filter(|computer| computer != &&self.current).map(|next_computer| NetworkTraveler::new(next_computer.clone(),  self.visited.clone(), self.network_topology )).collect::<Vec<_>>()
+        self.network_topology.get(&self.current).unwrap().iter().filter(|computer| computer != &&self.current).map(|next_computer| NetworkTraveler::new(next_computer.clone(),  self.visited.clone(), self.last_computer.clone(), self.network_topology )).collect::<Vec<_>>()
     }
 
     fn perfectly_connected(&self) -> bool {
         //! If all of this traveler's visited nodes are perfectly connected 
         //! (each mututally connected to all others), then every computer in visited's
         //! connected nodes should be a superset of the visited set
-        for computer in self.visited.iter() {
-            if !self.visited.is_subset(self.network_topology.get(computer).unwrap()) {
+        //! 
+        //! As an optimization, we track only the last visited computer, and only check 
+        //! if our visited is a subset of the last visited computers' connected computers.
+        //! So long as we do this every iteration, its just as valid as doing the full loop each time.
+        if let Some(last_computer) = self.last_computer.as_ref() {
+            if !self.visited.is_subset(self.network_topology.get(last_computer).unwrap()) {
                 return false;
             }
         }
