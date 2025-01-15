@@ -43,7 +43,7 @@ impl SolveAdvent for Day23 {
         let file_contents = read_input_file(path_to_file)?;
         let connection_topology = construct_topology(&file_contents)?;
         //We use a b-tree set because we need to keep track of unique vectors, but vectors are not hash, so they
-        //cannot go into a set.
+        //cannot go into a set. We could of course instead convert to a string and then hash
         let mut valid_computer_topologies = BTreeSet::new();
         for computer in connection_topology.keys() {
             let visited_computers = traverse_topology_map_recursively(&connection_topology, computer, Vec::new());
@@ -63,18 +63,21 @@ impl SolveAdvent for Day23 {
         let file_contents = read_input_file(path_to_file)?;
         let mut connection_topology = construct_topology(&file_contents)?;
         for (computer, connected_computers) in connection_topology.iter_mut() {
+            //For part2 solution, we add each computer to its own connected set. 
+            //This makes the `perfectly_connected` method on the `NetworkTraveler` work correctly
             connected_computers.insert(computer.to_string());
         }
 
         let mut optimizer = HashSet::new();
-        let mut largest_totally_connected_network = HashSet::new();
+        let mut largest_connected_network = HashSet::new();
         for starting_computer in connection_topology.keys() {
-            let largest_network = find_largest_connected_network( &mut optimizer, &starting_computer, &connection_topology);
-            if largest_network.len() > largest_totally_connected_network.len() {
-                largest_totally_connected_network = largest_network;
+            let largest_network = find_largest_connected_network( &mut optimizer, starting_computer, &connection_topology);
+            if largest_network.len() > largest_connected_network.len() {
+                largest_connected_network = largest_network;
             }
         }
-        let mut lan_network_password = largest_totally_connected_network.into_iter().collect::<Vec<_>>();
+        //The password is the longest set of connected computers, sorted and concenated by a comma
+        let mut lan_network_password = largest_connected_network.into_iter().collect::<Vec<_>>();
         lan_network_password.sort();
         println!("LAN Password is {:?}", lan_network_password.join(","));
         Ok(())
@@ -82,9 +85,12 @@ impl SolveAdvent for Day23 {
 }
 
 
-fn find_largest_connected_network( optimizer: &mut HashSet<(String, String)>, starting_position: &str, network: &ConnectionTopology) -> HashSet<String> {
+fn find_largest_connected_network(optimizer: &mut HashSet<(String, String)>, starting_position: &str, topology: &ConnectionTopology) -> HashSet<String> {
+    //! Starting from the `starting_position`, depth first traverse the computer network to find the 
+    //! largest set of connected devices. The Optimizer is used to prevent other invocations
+    //! of this call from wasting work traveling previously explored nodes. 
     let mut largest_connected_network = HashSet::new();
-    let mut traversal_queue = vec![NetworkTraveler::new(starting_position.to_string(), HashSet::new(), network)];
+    let mut traversal_queue = vec![NetworkTraveler::new(starting_position.to_string(), HashSet::new(), topology)];
     while let Some(mut current_traveler) = traversal_queue.pop() {
         let mut visited =  current_traveler.visited.clone().into_iter().collect::<Vec<_>>();
         visited.sort();
@@ -94,11 +100,9 @@ fn find_largest_connected_network( optimizer: &mut HashSet<(String, String)>, st
         }
         current_traveler.visit();
         optimizer.insert(optimizer_insert);
-        let perfectly_connnected = current_traveler.perfectly_connected();
-        if !perfectly_connnected {
+        if !current_traveler.perfectly_connected() {
             continue;
-        }
-        if perfectly_connnected && current_traveler.visited.len() > largest_connected_network.len() {
+        } else if current_traveler.visited.len() > largest_connected_network.len() {
             largest_connected_network = current_traveler.visited.clone();
         }
         traversal_queue.extend(current_traveler.spawn_next());
@@ -107,10 +111,13 @@ fn find_largest_connected_network( optimizer: &mut HashSet<(String, String)>, st
     largest_connected_network
 }
 
+///A traveler exploring the computer network
 struct NetworkTraveler<'a> {
+    ///This traveler's traversal history
     visited: HashSet<String>,
+    ///Current computer position
     current: String,
-    network: &'a ConnectionTopology
+    network_topology: &'a ConnectionTopology
 }
 
 impl <'a>NetworkTraveler <'a> {
@@ -118,7 +125,7 @@ impl <'a>NetworkTraveler <'a> {
         NetworkTraveler {
             current, 
             visited,
-            network
+            network_topology: network
         }
     }
     fn in_cycle(&self) -> bool {
@@ -128,12 +135,16 @@ impl <'a>NetworkTraveler <'a> {
         self.visited.insert(self.current.clone());
     }
     fn spawn_next(&self) -> Vec<Self> {
-        self.network.get(&self.current).unwrap().iter().map(|next_computer| NetworkTraveler::new(next_computer.clone(),  self.visited.clone(), &self.network )).collect::<Vec<_>>()
+        //! Travel to all of the next computers connect to current computer
+        self.network_topology.get(&self.current).unwrap().iter().filter(|computer| computer != &&self.current).map(|next_computer| NetworkTraveler::new(next_computer.clone(),  self.visited.clone(), self.network_topology )).collect::<Vec<_>>()
     }
 
     fn perfectly_connected(&self) -> bool {
+        //! If all of this traveler's visited nodes are perfectly connected 
+        //! (each mututally connected to all others), then every computer in visited's
+        //! connected nodes should be a superset of the visited set
         for computer in self.visited.iter() {
-            if !self.visited.is_subset(self.network.get(computer).unwrap()) {
+            if !self.visited.is_subset(self.network_topology.get(computer).unwrap()) {
                 return false;
             }
         }
